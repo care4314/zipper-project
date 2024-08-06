@@ -8,7 +8,6 @@
 
 using namespace std;
 
-// Class to represent an XML element
 class XMLElement {
 public:
     string tag;
@@ -26,7 +25,6 @@ struct XMLContext {
     XMLContext(shared_ptr<XMLElement> p, size_t index);
 };
 
-// Class definition for the XML Zipper
 class XMLZipper {
 private:
     shared_ptr<XMLElement> currentElement;
@@ -42,15 +40,14 @@ public:
     shared_ptr<XMLElement> getRoot();
     void displayDocument(const shared_ptr<XMLElement>& element, int depth = 0);
     void displayCurrentState();
-    void parseXML(istream& inputStream);
+    void parseXML(const string& input);
 
 private:
-    shared_ptr<XMLElement> parseXMLElement(istream& stream);
-    string readTag(istream& stream);
-    vector<pair<string, string>> readAttributes(istream& stream);
-    string readText(istream& stream);
-    void skipWhitespace(istream& stream);
-    void printCurrentState();
+    shared_ptr<XMLElement> parseXMLElement(const string& xml, size_t& pos);
+    string readTag(const string& xml, size_t& pos);
+    vector<pair<string, string>> readAttributes(const string& xml, size_t& pos);
+    string readText(const string& xml, size_t& pos);
+    void skipWhitespace(const string& xml, size_t& pos);
 };
 
 #endif // XMLZIPPER_H

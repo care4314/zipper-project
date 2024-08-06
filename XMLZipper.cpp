@@ -1,9 +1,4 @@
 #include "XMLZipper.h"
-#include <iostream>
-#include <memory>
-#include <sstream>
-
-using namespace std;
 
 XMLElement::XMLElement(const string& tagName, const string& textContent)
     : tag(tagName), text(textContent) {}
@@ -13,8 +8,9 @@ XMLContext::XMLContext(shared_ptr<XMLElement> p, size_t index)
 
 XMLZipper::XMLZipper(shared_ptr<XMLElement> root) : currentElement(root) {}
 
-void XMLZipper::parseXML(istream& inputStream) {
-    currentElement = parseXMLElement(inputStream);
+void XMLZipper::parseXML(const string& input) {
+    size_t pos = 0;
+    currentElement = parseXMLElement(input, pos);
     if (!currentElement) {
         cerr << "Failed to parse XML." << endl;
     } else {
@@ -22,85 +18,66 @@ void XMLZipper::parseXML(istream& inputStream) {
     }
 }
 
-shared_ptr<XMLElement> XMLZipper::parseXMLElement(istream& stream) {
-    skipWhitespace(stream);
-    string tag = readTag(stream);
+shared_ptr<XMLElement> XMLZipper::parseXMLElement(const string& xml, size_t& pos) {
+    skipWhitespace(xml, pos);
+    string tag = readTag(xml, pos);
     if (tag.empty()) {
         cerr << "Error: Failed to read tag or tag name is empty." << endl;
         return nullptr;
     }
 
     auto element = make_shared<XMLElement>(tag, "");
-    element->attributes = readAttributes(stream);
+    element->attributes = readAttributes(xml, pos);
 
-    char nextChar;
-    while (stream.get(nextChar)) {
-        if (nextChar == '<') {
-            if (stream.peek() == '/') {
-                while (stream.get(nextChar) && nextChar != '>') {}
+    while (pos < xml.size()) {
+        if (xml[pos] == '<') {
+            if (xml[pos + 1] == '/') {
+                pos = xml.find('>', pos);
+                if (pos == string::npos) break;
+                ++pos;
                 break;
-            } else if (stream.peek() == '?') {
-                while (stream.get(nextChar) && nextChar != '>') {}
-            } else if (stream.peek() == '!') {
-                while (stream.get(nextChar) && nextChar != '>') {}
+            } else if (xml[pos + 1] == '?' || xml[pos + 1] == '!') {
+                pos = xml.find('>', pos);
+                if (pos == string::npos) break;
+                ++pos;
             } else {
-                stream.putback('<');
-                element->children.push_back(parseXMLElement(stream));
+                element->children.push_back(parseXMLElement(xml, pos));
             }
-        } else if (nextChar == '>') {
-            element->text = readText(stream);
+        } else {
+            element->text = readText(xml, pos);
         }
     }
     return element;
 }
 
-string XMLZipper::readTag(istream& stream) {
+string XMLZipper::readTag(const string& xml, size_t& pos) {
     string tag;
-    char ch;
     bool inTag = false;
-    while (stream.get(ch)) {
-        if (ch == '>') {
-            break;
-        }
+    while (pos < xml.size()) {
+        char ch = xml[pos++];
+        if (ch == '>') break;
         if (ch == '<') {
-            if (inTag) {
-                cerr << "Error: Unexpected '<' character in tag reading." << endl;
-                return "";
-            }
             inTag = true;
             continue;
         }
-        if (inTag) {
-            tag += ch;
-        }
+        if (inTag) tag += ch;
     }
 
-    size_t pos = tag.find_first_of(" \t\n/>");
-    if (pos != string::npos) {
-        tag = tag.substr(0, pos);
-    }
+    size_t tagEnd = tag.find_first_of(" \t\n/>");
+    if (tagEnd != string::npos) tag = tag.substr(0, tagEnd);
 
-    cout << "Parsed tag: " << tag << endl;
     return tag;
 }
 
-vector<pair<string, string>> XMLZipper::readAttributes(istream& stream) {
+vector<pair<string, string>> XMLZipper::readAttributes(const string& xml, size_t& pos) {
     vector<pair<string, string>> attributes;
     string name, value;
-    char ch;
     bool inValue = false;
 
-    while (stream.get(ch)) {
+    while (pos < xml.size()) {
+        char ch = xml[pos++];
         if (ch == '=') {
-            if (name.empty()) {
-                cerr << "Error: Unexpected '=' character." << endl;
-                break;
-            }
-            stream.get(ch);
-            if (ch != '"') {
-                cerr << "Error: Expected opening quote for attribute value." << endl;
-                break;
-            }
+            pos++;
             inValue = true;
             continue;
         } else if (ch == '"') {
@@ -110,49 +87,30 @@ vector<pair<string, string>> XMLZipper::readAttributes(istream& stream) {
                 value.clear();
                 inValue = false;
                 continue;
-            } else {
-                cerr << "Error: Unexpected closing quote for attribute value." << endl;
-                break;
             }
         } else if (ch == '>') {
             break;
         } else if (ch != ' ' && ch != '\n' && ch != '\t' && ch != '/') {
-            if (inValue) {
-                value += ch;
-            } else {
-                name += ch;
-            }
+            if (inValue) value += ch;
+            else name += ch;
         } else if (ch == ' ' && !inValue && !name.empty()) {
             attributes.emplace_back(name, ""); 
             name.clear();
         }
     }
 
-    if (inValue) {
-        cerr << "Error: Attribute value not closed properly." << endl;
-    }
-
-    if (!name.empty()) {
-        attributes.emplace_back(name, ""); 
-    }
-
-    if (attributes.empty()) {
-        cerr << "Error: No attributes found or failed to read attributes." << endl;
-    } else {
-        for (const auto& attr : attributes) {
-            cout << "Attribute: " << attr.first << "=\"" << attr.second << "\"" << endl; 
-        }
-    }
+    if (inValue) cerr << "Error: Attribute value not closed properly." << endl;
+    if (!name.empty()) attributes.emplace_back(name, ""); 
 
     return attributes;
 }
 
-string XMLZipper::readText(istream& stream) {
+string XMLZipper::readText(const string& xml, size_t& pos) {
     string text;
-    char ch;
-    while (stream.get(ch)) {
+    while (pos < xml.size()) {
+        char ch = xml[pos++];
         if (ch == '<') {
-            stream.putback(ch); 
+            --pos;
             break;
         }
         text += ch;
@@ -160,13 +118,11 @@ string XMLZipper::readText(istream& stream) {
     return text;
 }
 
-void XMLZipper::skipWhitespace(istream& stream) {
-    char ch;
-    while (stream.get(ch)) {
-        if (ch != ' ' && ch != '\n' && ch != '\t') {
-            stream.putback(ch);
-            break;
-        }
+void XMLZipper::skipWhitespace(const string& xml, size_t& pos) {
+    while (pos < xml.size()) {
+        char ch = xml[pos];
+        if (ch != ' ' && ch != '\n' && ch != '\t') break;
+        ++pos;
     }
 }
 
@@ -233,9 +189,5 @@ void XMLZipper::displayDocument(const shared_ptr<XMLElement>& element, int depth
 }
 
 void XMLZipper::displayCurrentState() {
-    printCurrentState();
-}
-
-void XMLZipper::printCurrentState() {
     displayDocument(getRoot());
 }

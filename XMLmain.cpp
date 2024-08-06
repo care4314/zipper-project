@@ -1,5 +1,5 @@
 #include <iostream>
-#include <sstream>
+#include <string>
 #include "XMLZipper.h"
 
 using namespace std;
@@ -14,15 +14,11 @@ int main() {
     </company>
     )";
 
-    
-    std::istringstream xmlStream(xmlData);
-
-    
     auto root = make_shared<XMLElement>("root");
     XMLZipper zipper(root);
 
-    
-    zipper.parseXML(xmlStream);
+    // Directly pass the XML string to parseXML
+    zipper.parseXML(xmlData);
 
     // Display the current state
     zipper.displayCurrentState();
